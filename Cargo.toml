@@ -22,5 +22,5 @@ superblock = { git = "https://github.com/AerynOS/disks-rs", rev = "0768fe553b123
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 snafu = "0.8.6"
-uuid = { version = "1.14.0", features = ["v8"] }
+uuid = { version = "1.18.0", features = ["v8"] }
 zstd = "0.13.3"
