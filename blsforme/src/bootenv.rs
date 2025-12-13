@@ -163,17 +163,17 @@ impl BootEnvironment {
     }
 
     /// The so-called `$BOOT` partition (UEFI only at present)
-    pub fn boot_partition(&self) -> Option<&PathBuf> {
+    pub fn boot_partition(&self) -> Option<&Path> {
         self.xbootldr().or_else(|| self.esp())
     }
 
     /// Return the EFI System Partition (UEFI only)
-    pub fn esp(&self) -> Option<&PathBuf> {
-        self.esp.as_ref()
+    pub fn esp(&self) -> Option<&Path> {
+        self.esp.as_deref()
     }
 
     /// Return the XBOOTLDR partition (UEFI only)
-    pub fn xbootldr(&self) -> Option<&PathBuf> {
-        self.xbootldr.as_ref()
+    pub fn xbootldr(&self) -> Option<&Path> {
+        self.xbootldr.as_deref()
     }
 }
