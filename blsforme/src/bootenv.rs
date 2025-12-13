@@ -164,11 +164,7 @@ impl BootEnvironment {
 
     /// The so-called `$BOOT` partition (UEFI only at present)
     pub fn boot_partition(&self) -> Option<&PathBuf> {
-        if let Some(part) = self.xbootldr.as_ref() {
-            Some(part)
-        } else {
-            self.esp.as_ref()
-        }
+        self.xbootldr().or_else(|| self.esp())
     }
 
     /// Return the EFI System Partition (UEFI only)
