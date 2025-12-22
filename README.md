@@ -42,7 +42,7 @@ In a similar vein, [kernel-install](https://www.freedesktop.org/software/systemd
 Additionally `kernel-install` is designed to be a one-shot utility invoked by packaging triggers (or users) rather than a more contained facility to synchronise the target `ESP` (or `$BOOT`) with the expected state as provided by the final package-managed state.
 
 
-In the scope of [Serpent OS](https://serpentos.com/) and [Solus](https://getsol.us) - prebuilt initrds have been in use for years with great success. Given the requirement for both distributions to function correctly in dual-boot and non-appliance use cases, a `.uki` isn't going to permit our use case of generating dynamic cmdlines and shipping pre-signed assets.
+In the scope of [AerynOS](https://serpentos.com/) and [Solus](https://getsol.us) - prebuilt initrds have been in use for years with great success. Given the requirement for both distributions to function correctly in dual-boot and non-appliance use cases, a `.uki` isn't going to permit our use case of generating dynamic cmdlines and shipping pre-signed assets.
 
 ## Filesystem layout
 
