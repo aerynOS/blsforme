@@ -11,7 +11,7 @@ A management tool and library enabling Linux distributions to more easily adopt 
  - Concrete policy for kernel packaging, prebuilt vendor initrds, etc.
  - Rudimentary fallback for non-UEFI cases (GRUB2 chained bootloader)
 
-Primarily this tooling has been designed to assist the [moss](https://github.com/serpent-os/moss.git) package manager, but will remain agnostic to support the use case of [Solus](https://getsol.us) and other interested parties.
+Primarily this tooling has been designed to assist the [moss](https://github.com/aerynos/os-tools) package manager, but will remain agnostic to support the use case of [Solus](https://getsol.us) and other interested parties.
 
 ## Testing
 
@@ -29,7 +29,7 @@ cat /proc/cmdline
 sudo lsblk -f
 ```
 
-Paste a suitable excerpt of the above to e.g. https://bpa.st and link to it in the 'General - Serpent OS' channel on matrix
+Paste a suitable excerpt of the above to e.g. https://bpa.st and link to it in the 'General - AerynOS' channel on Zulip
 
 ## Difference to alternatives
 
@@ -42,7 +42,7 @@ In a similar vein, [kernel-install](https://www.freedesktop.org/software/systemd
 Additionally `kernel-install` is designed to be a one-shot utility invoked by packaging triggers (or users) rather than a more contained facility to synchronise the target `ESP` (or `$BOOT`) with the expected state as provided by the final package-managed state.
 
 
-In the scope of [AerynOS](https://serpentos.com/) and [Solus](https://getsol.us) - prebuilt initrds have been in use for years with great success. Given the requirement for both distributions to function correctly in dual-boot and non-appliance use cases, a `.uki` isn't going to permit our use case of generating dynamic cmdlines and shipping pre-signed assets.
+In the scope of [AerynOS](https://aerynos.com/) and [Solus](https://getsol.us) - prebuilt initrds have been in use for years with great success. Given the requirement for both distributions to function correctly in dual-boot and non-appliance use cases, a `.uki` isn't going to permit our use case of generating dynamic cmdlines and shipping pre-signed assets.
 
 ## Filesystem layout
 
