@@ -21,11 +21,14 @@ pub enum Error {
     #[snafu(display("missing mountpoint: {description}"))]
     MissingMount { description: &'static str },
 
-    #[snafu(display("io: {source}"))]
-    Io { source: std::io::Error },
+    #[snafu(display("io: {context}: {source}"))]
+    Io { source: std::io::Error, context: String },
 
     #[snafu(display("wip: {source}"))]
     Prefix { source: StripPrefixError },
+
+    #[snafu(display("path missing final component: {path:?}"))]
+    MissingFinalComponent { path: PathBuf },
 }
 
 #[derive(Debug)]
