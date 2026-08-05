@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use crate::{AuxiliaryFile, Configuration, Kernel, Schema};
+use crate::{Configuration, Kernel, Schema};
 
 /// An entry corresponds to a single kernel, and may have a supplemental
 /// cmdline
@@ -83,48 +83,6 @@ impl<'a> Entry<'a> {
             format!("{id}-{version}-{state_id}", version = self.kernel.version)
         } else {
             format!("{id}-{version}", version = self.kernel.version)
-        }
-    }
-
-    /// Generate an installed name for the kernel, used by bootloaders
-    /// Right now this only returns CBM style IDs
-    pub fn installed_kernel_name(&self, schema: &Schema) -> Option<String> {
-        // Prefer internal schema if available
-        let effective_schema = self.schema.as_ref().unwrap_or(schema);
-
-        match effective_schema {
-            Schema::Legacy { .. } => self
-                .kernel
-                .image
-                .file_name()
-                .map(|f| f.to_string_lossy())
-                .map(|filename| format!("kernel-{filename}")),
-            _ => Some(format!("{}/vmlinuz", self.kernel.version)),
-        }
-    }
-
-    /// Generate installed asset (aux) name, used by bootloaders
-    /// Right now this only returns CBM style IDs
-    pub fn installed_asset_name(&self, schema: &Schema, asset: &AuxiliaryFile) -> Option<String> {
-        // Prefer internal schema if available
-        let effective_schema = self.schema.as_ref().unwrap_or(schema);
-
-        match effective_schema {
-            Schema::Legacy { .. } => match asset.kind {
-                crate::AuxiliaryKind::InitRd => asset
-                    .path
-                    .file_name()
-                    .map(|f| f.to_string_lossy())
-                    .map(|filename| format!("initrd-{filename}")),
-                _ => None,
-            },
-            _ => {
-                let filename = asset.path.file_name().map(|f| f.to_string_lossy())?;
-                match asset.kind {
-                    crate::AuxiliaryKind::InitRd => Some(format!("{}/{}", self.kernel.version, filename)),
-                    _ => None,
-                }
-            }
         }
     }
 }
