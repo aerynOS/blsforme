@@ -11,7 +11,7 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::{Error, os_release::OsRelease};
+use crate::{Error, file_utils::PathExt, os_release::OsRelease};
 use os_info::OsInfo;
 
 /// Control kernel discovery mechanism
@@ -82,8 +82,11 @@ pub enum AuxiliaryKind {
     /// A cmdline snippet
     Cmdline,
 
-    /// An initial ramdisk
-    InitRd,
+    /// A versioned initial ramdisk
+    VersionedInitRd,
+
+    /// A shared initial ramdisk
+    SharedInitRd,
 
     /// System.map file
     SystemMap,
@@ -228,14 +231,14 @@ impl Schema {
                     }),
                     x if x == initrd_file => Some(AuxiliaryFile {
                         path: path.as_ref().into(),
-                        kind: AuxiliaryKind::InitRd,
+                        kind: AuxiliaryKind::VersionedInitRd,
                     }),
                     x if x.starts_with(&initrd_file) => {
                         // Version dependent initrd
                         if x != initrd_file && x.split_once(&initrd_file).is_some() {
                             Some(AuxiliaryFile {
                                 path: path.as_ref().into(),
-                                kind: AuxiliaryKind::InitRd,
+                                kind: AuxiliaryKind::VersionedInitRd,
                             })
                         } else {
                             None
@@ -247,7 +250,7 @@ impl Schema {
                             if !r.contains('.') {
                                 Some(AuxiliaryFile {
                                     path: path.as_ref().into(),
-                                    kind: AuxiliaryKind::InitRd,
+                                    kind: AuxiliaryKind::SharedInitRd,
                                 })
                             } else {
                                 None
@@ -260,7 +263,10 @@ impl Schema {
                 };
 
                 if let Some(aux_file) = aux {
-                    if matches!(aux_file.kind, AuxiliaryKind::InitRd) {
+                    if matches!(
+                        aux_file.kind,
+                        AuxiliaryKind::VersionedInitRd | AuxiliaryKind::SharedInitRd
+                    ) {
                         kernel.initrd.push(aux_file);
                     } else {
                         kernel.extras.push(aux_file);
@@ -303,15 +309,10 @@ impl Schema {
 
         // Walk kernels, find matching assets
         for (version, kernel) in kernel_images.iter_mut() {
-            let lepath = kernel
-                .image
-                .parent()
-                .ok_or(Error::InvalidFilesystem)?
-                .to_str()
-                .ok_or(Error::InvalidFilesystem)?;
+            let kernel_dir = kernel.image.parent().ok_or(Error::InvalidFilesystem)?;
             let versioned_assets = all_paths
                 .iter()
-                .filter(|p| !p.ends_with("vmlinuz") && p.starts_with(lepath) && !p.ends_with(version));
+                .filter(|p| !p.ends_with("vmlinuz") && p.starts_with(kernel_dir) && !p.ends_with(version));
             for asset in versioned_assets {
                 let filename = asset
                     .file_name()
@@ -331,9 +332,16 @@ impl Schema {
                         path: asset.clone(),
                         kind: AuxiliaryKind::Config,
                     }),
+                    // Older paradigm used before we had proper shared initrd support.
+                    // `-shared.initrd` files were placed beneath the versioned kernel
+                    // directory so they'd get picked up, but not deduplicated.
+                    _ if filename.ends_with("-shared.initrd") => Some(AuxiliaryFile {
+                        path: asset.clone(),
+                        kind: AuxiliaryKind::SharedInitRd,
+                    }),
                     _ if filename.ends_with(".initrd") => Some(AuxiliaryFile {
                         path: asset.clone(),
-                        kind: AuxiliaryKind::InitRd,
+                        kind: AuxiliaryKind::VersionedInitRd,
                     }),
                     _ if filename.ends_with(".cmdline") => Some(AuxiliaryFile {
                         path: asset.clone(),
@@ -343,20 +351,57 @@ impl Schema {
                 };
 
                 if let Some(aux_file) = aux {
-                    if matches!(aux_file.kind, AuxiliaryKind::InitRd) {
+                    if matches!(
+                        aux_file.kind,
+                        AuxiliaryKind::VersionedInitRd | AuxiliaryKind::SharedInitRd
+                    ) {
                         kernel.initrd.push(aux_file);
                     } else {
                         kernel.extras.push(aux_file);
                     }
                 }
+            }
 
+            // Add all shared init.rd files from `initrd.d`. Due to how we used to ship
+            // shared initrd files under the versioned kernel dir, anything here should
+            // "override" a matching file found from that dir. It existing here is
+            // hard confirmation this is a shared initrd filename.
+            let Some(initrd_d) = kernel_dir.parent().map(|p| p.join("initrd.d")) else {
+                continue;
+            };
+            let shared_initrd_assets = all_paths
+                .iter()
+                .filter(|p| p.starts_with(&initrd_d) && p.file_name_str().unwrap_or_default().ends_with(".initrd"));
+            for asset in shared_initrd_assets {
+                let filename = asset
+                    .file_name()
+                    .ok_or(Error::InvalidFilesystem)?
+                    .to_str()
+                    .ok_or(Error::InvalidFilesystem)?;
+
+                // If a shared initrd collides w/ an initrd found in the versioned kernel
+                // dir, remove the versioned initrd since those were the old hacky way
+                // of shipping shared initrd & we don't want to add them twice.
                 kernel
                     .initrd
-                    .sort_by_key(|i| i.path.display().to_string().to_lowercase());
-                kernel
-                    .extras
-                    .sort_by_key(|e| e.path.display().to_string().to_lowercase());
+                    .retain(|file| file.path.file_name_str().unwrap_or_default() != filename);
+
+                kernel.initrd.push(AuxiliaryFile {
+                    path: asset.to_owned(),
+                    kind: AuxiliaryKind::SharedInitRd,
+                });
             }
+
+            // Sort by file name, not path, since assets can exist between the
+            // `shared` directory and the versioned kernel directory. The filename
+            // should have the `NN-` prefix for determining the order for how
+            // assets should be loaded.
+            kernel
+                .initrd
+                .sort_by_key(|i| i.path.file_name_str().unwrap_or_default().to_lowercase());
+            kernel
+                .extras
+                .sort_by_key(|e| e.path.file_name_str().unwrap_or_default().to_lowercase());
         }
 
         Ok(kernel_images.into_values().collect::<Vec<_>>())
