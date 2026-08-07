@@ -13,9 +13,9 @@ use fs_err as fs;
 use snafu::{OptionExt as _, ResultExt as _};
 
 use crate::{
-    Entry, GlobalCmdline, Kernel, Schema,
+    AuxiliaryKind, Entry, GlobalCmdline, Kernel, Schema,
     bootloader::{IoSnafu, MissingFileSnafu, MissingFinalComponentSnafu, MissingMountSnafu, PrefixSnafu},
-    file_utils::{PathExt, changed_files, copy_atomic_vfat},
+    file_utils::{PathExt, changed_files, copy_atomic_vfat, read_dir_iter},
     manager::Mounts,
 };
 
@@ -191,12 +191,10 @@ impl<'a, 'b> Loader<'a, 'b> {
 
         // Find all loader files that match any of our prefixes
         let mut loader_files = Vec::new();
-        if let Ok(entries) = fs::read_dir(&loader_dir) {
-            for entry in entries.flatten() {
-                let file_name = entry.file_name().to_string_lossy().to_string();
-                if all_prefixes.iter().any(|prefix| file_name.starts_with(prefix)) {
-                    loader_files.push(entry.path());
-                }
+        for entry in read_dir_iter(&loader_dir) {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if all_prefixes.iter().any(|prefix| file_name.starts_with(prefix)) {
+                loader_files.push(entry.path());
             }
         }
 
@@ -204,23 +202,22 @@ impl<'a, 'b> Loader<'a, 'b> {
         let mut kernel_files = HashMap::new();
         for namespace in &all_namespaces {
             let efi_dir = self.boot_root.join_insensitive("EFI").join_insensitive(namespace);
-            if efi_dir.exists() {
-                if let Ok(entries) = fs::read_dir(&efi_dir) {
-                    for entry in entries.flatten() {
-                        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                            kernel_files.insert(entry.path(), vec![]);
-                        }
-                    }
+
+            if !efi_dir.exists() {
+                continue;
+            }
+
+            for entry in read_dir_iter(&efi_dir) {
+                if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                    kernel_files.insert(entry.path(), vec![]);
                 }
             }
         }
         // Add all files below each kernel directory
         for (kernel_dir, files) in kernel_files.iter_mut() {
-            if let Ok(entries) = fs::read_dir(kernel_dir) {
-                for entry in entries.flatten() {
-                    if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
-                        files.push(entry.path());
-                    }
+            for entry in read_dir_iter(kernel_dir) {
+                if entry.file_type().is_ok_and(|t| t.is_file()) {
+                    files.push(entry.path());
                 }
             }
         }
@@ -232,7 +229,17 @@ impl<'a, 'b> Loader<'a, 'b> {
 
         let obsolete_kernels = kernel_files
             .keys()
-            .filter(|dir| !installed_entries.iter().any(|e| e.kernel_dir == dir.to_string_lossy()))
+            .filter(|dir| {
+                // Don't cleanup shared dir if used by this scheme
+                if dir.file_name_str().unwrap_or_default() == "shared"
+                    && matches!(self.schema, Schema::Blsforme { .. } | Schema::OsInfo { .. })
+                {
+                    return false;
+                }
+
+                // Remove kernel dirs that have no more matching entries
+                !installed_entries.iter().any(|e| e.kernel_dir == dir.to_string_lossy())
+            })
             .collect::<Vec<_>>();
 
         let obsolete_kernel_files = kernel_files
@@ -460,7 +467,15 @@ impl<'a> EntryWithHashedAssets<'a> {
                 .kernel
                 .initrd
                 .iter()
-                .map(|file| HashedAsset::new(hasher, entry, HashedAssetKind::Initrd, &file.path))
+                .filter_map(|file| {
+                    let kind = match file.kind {
+                        AuxiliaryKind::VersionedInitRd => HashedAssetKind::VersionedInitrd,
+                        AuxiliaryKind::SharedInitRd => HashedAssetKind::SharedInitrd,
+                        _ => return None,
+                    };
+
+                    Some(HashedAsset::new(hasher, entry, kind, &file.path))
+                })
                 .collect::<Result<_, _>>()?,
         })
     }
@@ -470,10 +485,21 @@ impl<'a> EntryWithHashedAssets<'a> {
     }
 }
 
-/// Unique asset key (kernel version + filename).
+/// The scope determines which folder the asset
+/// will be installed into, under which it must
+/// have a unique filename.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum AssetScope<'a> {
+    /// Scoped to a kernel version
+    Versioned(&'a str),
+    /// Shared across any kernel
+    Shared,
+}
+
+/// Unique asset key (scope + filename).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct AssetKey<'a> {
-    kernel_version: &'a str,
+    scope: AssetScope<'a>,
     file_name: &'a str,
 }
 
@@ -535,7 +561,8 @@ impl<'a> AssetCollisions<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HashedAssetKind {
     Image,
-    Initrd,
+    VersionedInitrd,
+    SharedInitrd,
 }
 
 /// An asset that has been content hashed.
@@ -578,8 +605,14 @@ impl<'a> HashedAsset<'a> {
 
     /// The unique [`AssetKey`] for this asset.
     fn key(&'a self) -> AssetKey<'a> {
+        let scope = if matches!(self.kind, HashedAssetKind::SharedInitrd) {
+            AssetScope::Shared
+        } else {
+            AssetScope::Versioned(self.kernel_version)
+        };
+
         AssetKey {
-            kernel_version: self.kernel_version,
+            scope,
             file_name: self.file_name,
         }
     }
@@ -594,7 +627,7 @@ impl<'a> HashedAsset<'a> {
                 // Need to add `kernel-`
                 HashedAssetKind::Image => format!("kernel-{}", self.file_name),
                 // Already has `initrd-` prefix
-                HashedAssetKind::Initrd => self.file_name.to_owned(),
+                HashedAssetKind::VersionedInitrd | HashedAssetKind::SharedInitrd => self.file_name.to_owned(),
             },
             _ => {
                 let conflict_suffix = collisions
@@ -606,8 +639,11 @@ impl<'a> HashedAsset<'a> {
                     HashedAssetKind::Image => {
                         format!("{}/vmlinuz{conflict_suffix}", self.kernel_version)
                     }
-                    HashedAssetKind::Initrd => {
+                    HashedAssetKind::VersionedInitrd => {
                         format!("{}/{}{conflict_suffix}", self.kernel_version, self.file_name)
+                    }
+                    HashedAssetKind::SharedInitrd => {
+                        format!("shared/{}{conflict_suffix}", self.file_name)
                     }
                 }
             }
