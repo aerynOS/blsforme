@@ -15,6 +15,7 @@ blake3 = { version = "1.6.0", features = ["mmap", "rayon"] }
 log = "0.4.26"
 fs-err = "3.1.1"
 gpt = "4.1.0"
+itertools = "0.15.0"
 thiserror = "2.0.11"
 nix = { version = "0.31.2", features = ["fs", "mount"] }
 os-info = { git = "https://github.com/AerynOS/os-info", rev = "26b39c1d49c3b4f30d778729fb56958824c069de" }

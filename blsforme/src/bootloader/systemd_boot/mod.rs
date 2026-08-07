@@ -10,7 +10,7 @@ use fs_err as fs;
 use snafu::{OptionExt as _, ResultExt as _};
 
 use crate::{
-    Entry, Kernel, Schema,
+    Entry, GlobalCmdline, Kernel, Schema,
     bootloader::{IoSnafu, MissingFileSnafu, MissingMountSnafu, PrefixSnafu},
     file_utils::{PathExt, changed_files, copy_atomic_vfat},
     manager::Mounts,
@@ -116,29 +116,11 @@ impl<'a, 'b> Loader<'a, 'b> {
         Ok(())
     }
 
-    pub(super) fn sync_entries(
-        &self,
-        cmdline: impl Iterator<Item = &'a str>,
-        entries: &[Entry],
-        excluded_snippets: impl Iterator<Item = &'a str>,
-    ) -> Result<(), super::Error> {
-        let base_cmdline = cmdline.map(str::to_string).collect::<Vec<_>>();
-        let exclusions = excluded_snippets.map(str::to_string).collect::<Vec<_>>();
+    pub(super) fn sync_entries(&self, cmdline: &GlobalCmdline, entries: &[Entry]) -> Result<(), super::Error> {
         let mut installed_entries = vec![];
         for entry in entries {
-            let entry_cmdline = entry
-                .cmdline
-                .iter()
-                .filter(|c| !exclusions.contains(&c.name))
-                .map(|c| c.snippet.clone())
-                .collect::<Vec<_>>();
-            let full_cmdline = base_cmdline
-                .iter()
-                .chain(entry_cmdline.iter())
-                .cloned()
-                .collect::<Vec<_>>();
-
-            let installed = self.install(&full_cmdline.join(" "), entry)?;
+            let full_cmdline = cmdline.full_cmdline(entry);
+            let installed = self.install(&full_cmdline, entry)?;
             installed_entries.push(installed);
         }
 
@@ -248,7 +230,7 @@ impl<'a, 'b> Loader<'a, 'b> {
             .join_insensitive(format!("{}.conf", entry.id(effective_schema)));
         log::trace!("writing entry: {}", loader_id.display());
 
-        let sysroot = entry.sysroot.clone().unwrap_or_default();
+        let sysroot = &entry.sysroot;
 
         // Get kernel directory for this specific entry
         let kernel_dir = self.get_kernel_dir(entry);

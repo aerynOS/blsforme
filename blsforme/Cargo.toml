@@ -5,13 +5,15 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+topology = { path = "../crates/topology" }
+
 blake3.workspace = true
+fs-err.workspace = true
+gpt.workspace = true
+itertools.workspace = true
 log.workspace = true
 nix.workspace = true
 os-info.workspace = true
-serde.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 snafu.workspace = true
-topology = { path = "../crates/topology" }
-gpt.workspace = true
-fs-err.workspace = true
