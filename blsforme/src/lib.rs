@@ -8,25 +8,24 @@ use bootloader::systemd_boot;
 use gpt::GptError;
 use snafu::Snafu;
 
-mod kernel;
-pub use kernel::{AuxiliaryFile, AuxiliaryKind, BootJSON, Kernel, Schema};
-
-mod bootenv;
-pub use bootenv::{BootEnvironment, Firmware};
-pub mod bootloader;
-pub mod os_release;
-
-mod manager;
-pub use manager::Manager;
-
 /// Re-export the topology APIs
 pub use topology::disk;
 
-pub mod file_utils;
+pub use self::bootenv::{BootEnvironment, Firmware};
+pub use self::cmdline::GlobalCmdline;
+pub use self::entry::Entry;
+pub use self::kernel::{AuxiliaryFile, AuxiliaryKind, BootJSON, Kernel, Schema};
+pub use self::manager::Manager;
 
+mod bootenv;
+mod cmdline;
 mod entry;
+mod kernel;
+mod manager;
 
-pub use entry::{CmdlineEntry, Entry};
+pub mod bootloader;
+pub mod file_utils;
+pub mod os_release;
 
 /// Core error type for blsforme
 #[derive(Debug, Snafu)]

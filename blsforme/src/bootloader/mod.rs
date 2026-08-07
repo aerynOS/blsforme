@@ -8,7 +8,7 @@ use std::path::{PathBuf, StripPrefixError};
 
 use snafu::Snafu;
 
-use crate::{Entry, Firmware, Kernel, Schema, manager::Mounts};
+use crate::{Entry, Firmware, GlobalCmdline, Kernel, Schema, manager::Mounts};
 
 pub mod systemd_boot;
 
@@ -57,14 +57,9 @@ impl<'a, 'b> Bootloader<'a, 'b> {
         }
     }
 
-    pub fn sync_entries(
-        &self,
-        cmdline: impl Iterator<Item = &'a str>,
-        entries: &[Entry],
-        excluded_snippets: impl Iterator<Item = &'a str>,
-    ) -> Result<(), Error> {
+    pub fn sync_entries(&self, cmdline: &GlobalCmdline, entries: &[Entry]) -> Result<(), Error> {
         match &self {
-            Bootloader::Systemd(s) => s.sync_entries(cmdline, entries, excluded_snippets),
+            Bootloader::Systemd(s) => s.sync_entries(cmdline, entries),
         }
     }
 

@@ -10,31 +10,38 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{Error, IoSnafu};
 use fs_err::{self as fs, File};
-use snafu::ResultExt as _;
 
-/// Case-insensitive path joining for FAT, respecting existing entries on the filesystem
-/// Note, this discards errors, so will require read permissions
-pub trait PathExt<P: AsRef<Path>> {
-    fn join_insensitive(&self, path: P) -> PathBuf;
+/// Path extensions
+pub trait PathExt {
+    /// Case-insensitive path joining for FAT, respecting existing entries on the filesystem
+    /// Note, this discards errors, so will require read permissions
+    fn join_insensitive<P: AsRef<Path>>(&self, path: P) -> PathBuf;
+    fn file_name_str(&self) -> Option<&str>;
 }
 
-impl<P: AsRef<Path>> PathExt<P> for PathBuf {
-    fn join_insensitive(&self, path: P) -> PathBuf {
+impl<T> PathExt for T
+where
+    T: AsRef<Path>,
+{
+    fn join_insensitive<P: AsRef<Path>>(&self, path: P) -> PathBuf {
         let real_path: &Path = path.as_ref();
-        if let Ok(dir) = fs::read_dir(self) {
+        if let Ok(dir) = fs::read_dir(self.as_ref()) {
             let entries = dir.filter_map(|e| e.ok()).filter_map(|p| {
                 let n = p.file_name();
                 n.into_string().ok()
             });
             for entry in entries {
                 if entry.to_lowercase() == real_path.to_string_lossy().to_lowercase() {
-                    return self.join(&entry);
+                    return self.as_ref().join(&entry);
                 }
             }
         }
-        self.join(path)
+        self.as_ref().join(path)
+    }
+
+    fn file_name_str(&self) -> Option<&str> {
+        self.as_ref().file_name().and_then(|name| name.to_str())
     }
 }
 
@@ -130,18 +137,10 @@ pub fn copy_atomic_vfat(source: impl AsRef<Path>, dest: impl AsRef<Path>) -> io:
     Ok(())
 }
 
-/// Read a cmdline snippet from a file, which supports comments (`#`)
-/// and concatenates lines into a single string.
-pub fn cmdline_snippet(path: impl AsRef<Path>) -> Result<String, Error> {
-    let path = path.as_ref();
-    log::trace!("Reading cmdline snippet: {path:?}");
-    let ret = fs::read_to_string(path)
-        .context(IoSnafu)?
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.starts_with('#'))
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_string();
-    Ok(ret)
+/// Returns an iterator over the entries within `dir`.
+///
+/// All errors are flattened away, returning only the entries
+/// that could be successfully read.
+pub fn read_dir_iter(dir: &Path) -> impl Iterator<Item = fs::DirEntry> {
+    fs::read_dir(dir).into_iter().flat_map(|iter| iter.flatten())
 }

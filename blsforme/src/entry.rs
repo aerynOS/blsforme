@@ -4,20 +4,7 @@
 
 use std::path::PathBuf;
 
-use fs_err as fs;
-use snafu::ResultExt as _;
-
-use crate::{AuxiliaryFile, Configuration, IoSnafu, Kernel, Schema, file_utils::cmdline_snippet};
-
-/// A cmdline entry is found in the `$sysroot/usr/lib/kernel/cmdline.d` directory
-#[derive(Debug)]
-pub struct CmdlineEntry {
-    /// Name of the entry, i.e. `00-quiet.cmdline`
-    pub name: String,
-
-    /// Text contents of this cmdline entry
-    pub snippet: String,
-}
+use crate::{AuxiliaryFile, Configuration, Kernel, Schema};
 
 /// An entry corresponds to a single kernel, and may have a supplemental
 /// cmdline
@@ -25,9 +12,9 @@ pub struct CmdlineEntry {
 pub struct Entry<'a> {
     pub(crate) kernel: &'a Kernel,
 
-    pub(crate) sysroot: Option<PathBuf>,
+    pub(crate) sysroot: PathBuf,
 
-    pub(crate) cmdline: Vec<CmdlineEntry>,
+    pub(crate) cmdline: Vec<String>,
 
     /// Unique state ID for this entry
     pub(crate) state_id: Option<i32>,
@@ -38,60 +25,21 @@ pub struct Entry<'a> {
 
 impl<'a> Entry<'a> {
     /// New entry for the given kernel
-    pub fn new(kernel: &'a Kernel) -> Self {
+    pub fn new(config: &Configuration, kernel: &'a Kernel) -> Self {
         Self {
             kernel,
+            sysroot: config.root.path().to_owned(),
             cmdline: vec![],
-            sysroot: None,
             state_id: None,
             schema: None,
         }
     }
 
-    /// Load cmdline snippets from the system root for this entry's sysroot
-    pub fn load_cmdline_snippets(&mut self, config: &Configuration) -> Result<(), super::Error> {
-        let sysroot = self.sysroot.clone().unwrap_or(config.root.path().into());
-
-        // Load local cmdline snippets for this kernel entry
-        for snippet in self
-            .kernel
-            .extras
-            .iter()
-            .filter(|e| matches!(e.kind, crate::AuxiliaryKind::Cmdline))
-        {
-            if let Ok(cmdline) = cmdline_snippet(sysroot.join(&snippet.path)) {
-                self.cmdline.push(CmdlineEntry {
-                    name: snippet.path.file_name().unwrap().to_string_lossy().to_string(),
-                    snippet: cmdline,
-                });
-            }
-        }
-
-        // Globals
-        let cmdline_d = sysroot.join("usr").join("lib").join("kernel").join("cmdline.d");
-
-        if !cmdline_d.exists() {
-            return Ok(());
-        }
-
-        let entries = fs::read_dir(&cmdline_d).context(IoSnafu)?;
-
-        for entry in entries.filter_map(Result::ok) {
-            let name = entry.file_name().to_string_lossy().to_string();
-            // Don't bomb out on invalid cmdline snippets
-            if let Ok(snippet) = cmdline_snippet(entry.path()) {
-                self.cmdline.push(CmdlineEntry { name, snippet });
-            }
-        }
-
-        Ok(())
-    }
-
     /// With the given system root
-    /// This will cause any local snippets to be discovered
+    /// This affects where local snippets & files are loaded from
     pub fn with_sysroot(self, sysroot: impl Into<PathBuf>) -> Self {
         Self {
-            sysroot: Some(sysroot.into()),
+            sysroot: sysroot.into(),
             ..self
         }
     }
@@ -116,7 +64,7 @@ impl<'a> Entry<'a> {
 
     /// With the given cmdline entry
     /// Used by moss to inject a `moss.tx={}` parameter
-    pub fn with_cmdline(self, entry: CmdlineEntry) -> Self {
+    pub fn with_cmdline(self, entry: String) -> Self {
         let mut cmdline = self.cmdline;
         cmdline.push(entry);
         Self { cmdline, ..self }
