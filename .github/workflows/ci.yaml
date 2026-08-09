@@ -18,7 +18,7 @@ jobs:
 
     steps:
     - name: Checkout source
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -50,5 +50,5 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: crate-ci/typos@v1.28.1
+      - uses: actions/checkout@v7
+      - uses: crate-ci/typos@v1.49.0
