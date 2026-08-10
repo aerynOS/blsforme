@@ -71,7 +71,7 @@ impl<'a> Manager<'a> {
             // For anything that's a symlink to /dev/null, we'll exclude the matching system-wide cmdline
             if entry.is_symlink() {
                 if let Ok(target) = entry.read_link() {
-                    if target == PathBuf::from("/dev/null") {
+                    if target == Path::new("/dev/null") {
                         log::trace!("excluding system-wide cmdline.d entry {entry:?}");
                         system_excludes.push(entry.file_name().unwrap_or_default().to_string_lossy().to_string());
                         continue;

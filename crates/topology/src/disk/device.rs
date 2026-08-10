@@ -121,7 +121,7 @@ impl<'a> BlockDevice<'a> {
                 }
             }
         } else if !self.aux {
-            format!("root={}", &self.path)
+            format!("root={}", self.path)
         } else {
             String::new()
         };

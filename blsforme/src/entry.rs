@@ -132,9 +132,9 @@ impl<'a> Entry<'a> {
             _ => effective_schema.os_id(),
         };
         if let Some(state_id) = self.state_id.as_ref() {
-            format!("{id}-{version}-{state_id}", version = &self.kernel.version)
+            format!("{id}-{version}-{state_id}", version = self.kernel.version)
         } else {
-            format!("{id}-{version}", version = &self.kernel.version)
+            format!("{id}-{version}", version = self.kernel.version)
         }
     }
 
@@ -173,7 +173,7 @@ impl<'a> Entry<'a> {
             _ => {
                 let filename = asset.path.file_name().map(|f| f.to_string_lossy())?;
                 match asset.kind {
-                    crate::AuxiliaryKind::InitRd => Some(format!("{}/{}", &self.kernel.version, filename)),
+                    crate::AuxiliaryKind::InitRd => Some(format!("{}/{}", self.kernel.version, filename)),
                     _ => None,
                 }
             }
