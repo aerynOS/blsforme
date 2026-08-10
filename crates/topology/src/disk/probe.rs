@@ -58,7 +58,7 @@ impl Probe {
             let matching_device = self
                 .mounts
                 .iter()
-                .find(|m| PathBuf::from(m.mountpoint) == mountpoint)
+                .find(|m| Path::new(m.mountpoint) == mountpoint)
                 .ok_or(super::Error::UnknownMount { path: mountpoint })?;
             // TODO: Handle `ZFS=`, and composite bcachefs mounts (dev:dev1:dev2)
             Ok(matching_device.device.into())
