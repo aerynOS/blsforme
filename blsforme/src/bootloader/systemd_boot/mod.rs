@@ -384,7 +384,7 @@ impl<'a, 'b> Loader<'a, 'b> {
         let initrd = if entry.initrd.is_empty() {
             "\n".to_string()
         } else {
-            let initrds = entry
+            entry
                 .initrd
                 .iter()
                 .map(|asset| {
@@ -393,8 +393,7 @@ impl<'a, 'b> Loader<'a, 'b> {
                         asset.installed_name(effective_schema, collisions)
                     )
                 })
-                .collect::<String>();
-            format!("\n{initrds}")
+                .collect::<String>()
         };
         let title = if let Some(pretty) = effective_schema.os_display_name() {
             format!("{pretty} ({})", entry.kernel_version())
